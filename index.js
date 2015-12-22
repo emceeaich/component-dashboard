@@ -6,8 +6,31 @@
  * (c) 2015, Mozilla Corporation
  */
 
-var bz = require("bz");
-var client = bz.createClient({timeout: 30000});
+if (typeof fetch === 'undefined') {
+    displayError('This requires a browser that supports <code>fetch</code>. Try with Firefox or Chrome.');
+}
+
+/* Set Up Fetch */
+
+var bzRequest = new Request('https://bugzilla.mozilla.org/rest/bug?component=Password%20Manager&product=Toolkit',
+    { mode: 'cors' });
+
+fetch(bzRequest)
+.then(function(response) {
+    if(response.ok) {
+        response.json().then(function(json) {
+            createReport(json.bugs);
+        });
+    }
+    else {
+        displayError('Request for bugs returned an invalid http response.')
+    }
+})
+.catch(function(error) {
+    displayError('Something went dreadfully wrong when we tried to request the bug list.');
+});
+
+/* Create an object to Classify Bugs */
 
 var Bug = function(obj) {
     this.data = obj;
@@ -112,15 +135,53 @@ var Bug = function(obj) {
     return this;
 }
 
-client.searchBugs({product: 'Toolkit', component: 'Password Manager'}, function(error, data) {
-    if (!error) {
-        console.log('Got back', data.length, 'bugs');
-        classifyBugs(data);
-    }    
-    else {
-        console.log(error);
-    }
-});
+function createReport(data) {
+    var container = false, bar, loading, legend, percent;
+    var categories = classifyBugs(data);
+    var total = 0;
+
+    // Check our work
+    console.log('Got back', data.length, 'bugs');
+    Object.keys(categories).forEach(function(category, i, arr) { total = total + categories[category]; });
+    console.log('Total', total, 'bugs');
+
+    Object.keys(categories).forEach(function(category, i, arr) { 
+
+        percent = Math.floor((categories[category] / total) * 100) + '%';
+
+        if (typeof window !== 'undefined') {
+
+            // Do this once
+            if (!container) {
+                container = document.querySelector('div.container');
+                loading = document.querySelector('div.loading');
+                container.removeChild(loading);
+            }
+            bar = document.createElement('div');
+            bar.className = 'bar';
+            bar.style.width = percent;
+            container.appendChild(bar);
+            legend = document.createElement('span');
+            legend.className = 'legend';
+            legend.innerText = category + ': ' + categories[category] + ': ' + percent;
+            bar.appendChild(legend);
+        }
+        else {
+            console.log(category, categories[category], percent);    
+        }
+
+    });  
+};
+
+function displayError(text) {
+    var error = document.createElement('div');
+    error.className = 'error';
+    var message = document.createElement('div');
+    message.innerText = text;
+    message.className = 'message';
+    error.appendChild(message);
+    document.querySelector('body').appendChild(error);
+}
 
 function classifyBugs(data) {
     var categories = {};
@@ -134,6 +195,6 @@ function classifyBugs(data) {
             categories[category] = 1;
         }
     });
-    console.log(categories);
+    return categories;
 }
 
