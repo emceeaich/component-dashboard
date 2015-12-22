@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Component Dashboard</title>
+<style>
+    body {
+        font-family: system, -apple-system;
+        background-color: snow;
+        padding: 0;
+        margin: 0;
+    }
+    h1 {
+        margin-left: 20px;
+        margin-top: 1em;
+    }
+    div.container {
+        width: 960px;
+    }
+    div.container div.bar {
+        background-color: rebeccapurple;
+        border: solid 1px rebeccapurple;
+        margin-bottom: 10px;
+        height: 18px;
+        margin-left: 230px;
+    }
+    span.legend {
+        color: darkslategrey;
+        margin-left: -210px;
+    }
+    div.loading {
+        font-size: 125%;
+        padding-top: 2em;
+        margin-left: 20px;
+    }   
+    div.footer {
+        position: absolute;
+        bottom: 1em;
+        margin-left: 1em;
+        z-index: 1;
+    }
+    div.error {
+        z-index: 2;
+        background-color: rgba(0, 0, 0, 0.5);
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+    }
+    div.message {
+        background-color: snow;
+        color: darkslategrey;
+        width: 40%;
+        margin-top: 10em;
+        height: 1em;
+        margin-left: auto;
+        margin-right: auto;
+        padding-top: 1em;
+        height: 3em;
+        text-align: center;
+        font-weight: bold;
+    }
+    
+</style>
+</head>
+<body>
+<h1>Password Manager Bugs</h1>
+<div class="container">
+<div class="loading">Loading…</div>
+</div>
+<div class="footer">
+    © 2015, Mozilla Corporation, <a href="https://github.com/emceeaich/component-dashboard">Source</a>
+</div>
+<script src="index.js"></script>
+</body>
+</html>
