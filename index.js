@@ -11,6 +11,8 @@ if (typeof fetch === 'undefined') {
     displayError('This requires a browser that supports <code>fetch</code>. Try with Firefox or Chrome.');
 }
 
+var status = document.querySelector('div.status');
+
 /* Set Up Fetch */
 
 var bzRequest = new Request('https://bugzilla.mozilla.org/rest/bug?include_fields=id&component=Password%20Manager&product=Toolkit',
@@ -144,6 +146,9 @@ var Bug = function(obj) {
 
 function createReport(data) {
     console.log ('got', data.length, 'bugs');
+
+    status.innerText = 'Found ' + bugs + ' bugs';
+
     // take slices of the array and fetch each one's details
     var sliceSize = 100, offset = 0, more = true, slice, slices, buglist, subRequest, returns = 0, bugs = [], ids;
 
@@ -183,11 +188,12 @@ function createReport(data) {
             });
         }
         offset = offset + sliceSize;
+        status.innerText = 'Read ' + offset + ' bugs.';
     }
 }
 
 function renderReport(data) {
-    var container = false, bar, loading, legend, percent;
+    var container = false, bar, legend, percent;
     var categories = classifyBugs(data);
     var total = 0;
 
@@ -205,8 +211,7 @@ function renderReport(data) {
             // Do this once
             if (!container) {
                 container = document.querySelector('div.container');
-                loading = document.querySelector('div.loading');
-                container.removeChild(loading);
+                container.removeChild(status);
             }
             bar = document.createElement('div');
             bar.className = 'bar';
