@@ -6,28 +6,23 @@
  * (c) 2015, Mozilla Corporation
  */
 
+(function() {
 
 if (typeof fetch === 'undefined') {
     displayError('This requires a browser that supports <code>fetch</code>. Try with Firefox or Chrome.');
 }
 
-var status = document.querySelector('div.status');
+var statusLine = document.querySelector('div.status');
 
 /* Set Up Fetch */
 
 var bzRequest = new Request('https://bugzilla.mozilla.org/rest/bug?include_fields=id&component=Password%20Manager&product=Toolkit',
     { mode: 'cors' });
 
-var t0, t1;
-
-t0 = performance.now();
-
 fetch(bzRequest)
 .then(function(response) {
     if(response.ok) {
         response.json().then(function(json) {
-            t1 = performance.now()
-            console.log('got response in', (t1 - t0)/1000, 'seconds');
             createReport(json.bugs);
         });
     }
@@ -147,10 +142,10 @@ var Bug = function(obj) {
 function createReport(data) {
     console.log ('got', data.length, 'bugs');
 
-    status.innerText = 'Found ' + bugs + ' bugs';
+    statusLine.innerText = 'Found ' + data.length + ' bugs';
 
     // take slices of the array and fetch each one's details
-    var sliceSize = 100, offset = 0, more = true, slice, slices, buglist, subRequest, returns = 0, bugs = [], ids;
+    var sliceSize = 50, offset = 0, more = true, slice, slices, buglist, subRequest, returns = 0, bugs = [], ids, timers;
 
     slices = Math.ceil(data.length / sliceSize);
     console.log('will fetch', slices, 'slices of', sliceSize, 'bugs');    
@@ -163,20 +158,17 @@ function createReport(data) {
             subRequest = new Request('https://bugzilla.mozilla.org/rest/bug?id=' + 
                 ids, { mode: 'cors' });
 
-            t0 = performance.now();
-
             fetch(subRequest)
             .then(function(response) {
                 if(response.ok) {
                     response.json().then(function(json) {
                         returns++; // count returned response
-                        t1 = performance.now()
-                        console.log('got response', returns, 'in', (t1 - t0)/1000, 'seconds');
                         Array.prototype.push.apply(bugs, json.bugs);
                         if (returns === slices) {
                             console.log('got back all slices');
                             renderReport(bugs);
                         }
+                        statusLine.innerText = 'Read ' + bugs.length + ' bugs';
                     });
                 }
                 else {
@@ -188,7 +180,6 @@ function createReport(data) {
             });
         }
         offset = offset + sliceSize;
-        status.innerText = 'Read ' + offset + ' bugs.';
     }
 }
 
@@ -211,7 +202,7 @@ function renderReport(data) {
             // Do this once
             if (!container) {
                 container = document.querySelector('div.container');
-                container.removeChild(status);
+                container.removeChild(statusLine);
             }
             bar = document.createElement('div');
             bar.className = 'bar';
@@ -254,3 +245,4 @@ function classifyBugs(data) {
     return categories;
 }
 
+})();
