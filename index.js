@@ -145,12 +145,12 @@ function createReport(data) {
     statusLine.innerText = 'Found ' + data.length + ' bugs';
 
     // take slices of the array and fetch each one's details
-    var sliceSize = 50, offset = 0, more = true, slice, slices, buglist, subRequest, returns = 0, bugs = [], ids, timers;
+    var sliceSize = 50, offset = 0, more = true, slice, slices, buglist, subRequest, returns = 0, bugs = [], ids, timers, isErr = false, done = false, i = 0;
 
     slices = Math.ceil(data.length / sliceSize);
     console.log('will fetch', slices, 'slices of', sliceSize, 'bugs');    
 
-    for (var i = 0; i < slices; i++) {
+    while (!done) {
         slice = data.slice(offset, offset + sliceSize);
         ids = slice.map(function(bug,i,arr) { return bug.id; }).join(',');
 
@@ -172,14 +172,20 @@ function createReport(data) {
                     });
                 }
                 else {
-                    displayError('Request for bugs returned an invalid http response.')
+                    displayError('Request for bugs returned an invalid http response.');
+                    done = true;
                 }
             })
             .catch(function(error) {
-                displayError('Something went dreadfully wrong when we tried to request the bug list.');
+                displayError('Something went dreadfully wrong when we tried to request the bugs.');
+                done = true;
             });
         }
         offset = offset + sliceSize;
+        i ++;
+        if (i > slices) {
+            done = true;
+        }
     }
 }
 
@@ -221,13 +227,9 @@ function renderReport(data) {
 };
 
 function displayError(text) {
-    var error = document.createElement('div');
-    error.className = 'error';
-    var message = document.createElement('div');
+    var message = document.querySelector('div.error div.message');
     message.innerText = text;
-    message.className = 'message';
-    error.appendChild(message);
-    document.querySelector('body').appendChild(error);
+    document.querySelector('div.error').style.display = 'block';
 }
 
 function classifyBugs(data) {
