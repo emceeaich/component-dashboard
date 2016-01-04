@@ -69,6 +69,9 @@ var Bug = function(obj) {
         else if (this.isNew()) {
             result = '[NEW]';
         }
+        else if (this.needsTriage()) {
+            result = '[NEEDS_TRIAGE]';
+        }
         else {
             console.log('Could not categorize', this.data.id, this.data.status, this.data.resolution);
         }
@@ -110,8 +113,10 @@ var Bug = function(obj) {
         return (this.isFlaggedForARelease());
     };
     this.isNew = function() {
-        return (this.data.status === 'NEW' ||
-                this.data.status === 'UNCONFIRMED');
+        return (this.data.status === 'NEW');
+    };
+    this.needsTriage = function() {
+        return (this.data.status === 'UNCONFIRMED');
     };
     this.hasFlag = function(name, status) {
         return (this.data.flags && this.data.flags.some(function(flag, i, arry) {
