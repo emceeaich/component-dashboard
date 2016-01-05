@@ -13,17 +13,24 @@ if (typeof fetch === 'undefined') {
 }
 
 var statusLine = document.querySelector('div.status');
+var totalLine  = document.querySelector('div.total');
+var product    = "Toolkit";
+var component  = "Password Manager";
+
+document.querySelector('h1').innerText = 'Component Dashboard for ' + product + ':' + component;
 
 /* Set Up Fetch */
 
-var bzRequest = new Request('https://bugzilla.mozilla.org/rest/bug?include_fields=id&component=Password%20Manager&product=Toolkit',
-    { mode: 'cors' });
+var bzRequest = new Request('https://bugzilla.mozilla.org/rest/bug?include_fields=id&component=' + 
+    encodeURIComponent(component) +
+    '&product=' +
+    encodeURIComponent(product), { mode: 'cors' });
 
 fetch(bzRequest)
 .then(function(response) {
     if(response.ok) {
         response.json().then(function(json) {
-            createReport(json.bugs);
+            createReport(json.bugs, 75);
         });
     }
     else {
@@ -59,6 +66,12 @@ var Bug = function(obj) {
         }
         else if (this.hasBeenPrioritized()) {
             result = '[PRIORITIZED]';
+        }
+        else if (this.notAPriority()) {
+            result = '[BACKLOG]';
+        }
+        else if (this.forCommunityDevelopers()) {
+            result = '[COMMUNITY]';
         }
         else if (this.needsPriority()) {
             result = '[NEEDS_PRIORITY]';
@@ -106,6 +119,12 @@ var Bug = function(obj) {
         return ((['P1', 'P2', 'P3'].indexOf(this.data.priority.toUpperCase()) > -1) ||
                 this.hasFlag('firefox-backlog', '+'));
     };
+    this.notAPriority = function() {
+        return (['P4'].indexOf(this.data.priority.toUpperCase()) > -1);
+    };
+    this.forCommunityDevelopers = function() {
+        return (['P5'].indexOf(this.data.priority.toUpperCase()) > -1 || this.hasWhiteboardTag('good first bug'));
+    }
     this.needsPriority = function() {
         return (this.hasFlag('firefox-backlog', '?') || this.data.status.toUpperCase() === 'REOPENED');
     };
@@ -141,16 +160,26 @@ var Bug = function(obj) {
             return (['?'].indexOf(this.data[flag]) > -1);
         }, this);
     };
+    this.hasWhiteboardTag = function(tag) {
+        return (this.data.whiteboard.toLowerCase().indexOf(tag) > -1 ||
+                this.data.whiteboard.toLowerCase().indexOf('[' + tag + ']') > -1 ||
+                this.data.whiteboard.toLowerCase().indexOf('[ ' + tag + ' ]') > -1)
+    };
     return this;
 }
 
-function createReport(data) {
+function createReport(data, sliceSize) {
     console.log ('got', data.length, 'bugs');
 
-    statusLine.innerText = 'Found ' + data.length + ' bugs';
+    if (data.length > 0) {
+        totalLine.innerHTML = "<strong>Total:</strong> " + data.length;
+    }
+    else {
+        totalLine.innerHTML = "<strong>zarro boogs found</strong>";
+    }
 
     // take slices of the array and fetch each one's details
-    var sliceSize = 50, offset = 0, more = true, slice, slices, buglist, subRequest, returns = 0, bugs = [], ids, timers, isErr = false, done = false, i = 0;
+    var offset = 0, more = true, slice, slices, buglist, subRequest, returns = 0, bugs = [], ids, timers, isErr = false, done = false, i = 0;
 
     slices = Math.ceil(data.length / sliceSize);
     console.log('will fetch', slices, 'slices of', sliceSize, 'bugs');    
@@ -201,6 +230,8 @@ function renderReport(data) {
 
     // Check our work
     console.log('Got back', data.length, 'bugs');
+
+
     Object.keys(categories).forEach(function(category, i, arr) { total = total + categories[category]; });
     console.log('Total', total, 'bugs');
 
@@ -216,7 +247,7 @@ function renderReport(data) {
                 container.removeChild(statusLine);
             }
             bar = document.createElement('div');
-            bar.className = 'bar';
+            bar.className = 'bar ' + category.replace(/([\[\]])/g,'').toLowerCase();
             bar.style.width = percent;
             container.appendChild(bar);
             legend = document.createElement('span');
