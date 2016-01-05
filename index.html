@@ -17,18 +17,30 @@
     div.container {
         width: 960px;
     }
-    div.container div.bar {
+    div.bar {
         background-color: rebeccapurple;
         border: solid 1px rebeccapurple;
         margin-bottom: 10px;
         height: 18px;
         margin-left: 230px;
     }
+    div.bar.needs_priority, div.bar.needs_triage {
+        background-color: crimson;
+        border: solid 1px crimson;
+    }
+    div.bar.unmerged, div.bar.new, div.bar.has_version {
+        background-color: fuchsia;
+        border: solid 1px fuchsia;
+    }
+    div.bar.done, div.bar.closed {
+        background-color: teal;
+        border: solid 1px teal;
+    }
     span.legend {
         color: darkslategrey;
         margin-left: -210px;
     }
-    div.status {
+    div.status, div.total {
         font-size: 125%;
         padding-top: 2em;
         margin-left: 20px;
@@ -62,7 +74,6 @@
         text-align: center;
         font-weight: bold;
     }
-    
 </style>
 </head>
 <body>
@@ -70,6 +81,9 @@
 <div class="container">
 <div class="status">Loading…</div>
 </div>
+<div class="total">
+
+<div>
 <div class="error">
     <div class="message"></div>
 </div>
