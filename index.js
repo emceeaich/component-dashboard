@@ -12,6 +12,8 @@ if (typeof fetch === 'undefined') {
     displayError('This requires a browser that supports <code>fetch</code>. Try with Firefox or Chrome.');
 }
 
+var AGE  = 2*60*60*24*7*1000; // weeks in µ seconds
+
 var statusLine = document.querySelector('div.status');
 var totalLine  = document.querySelector('div.total');
 var product    = "Toolkit";
@@ -47,7 +49,10 @@ var Bug = function(obj) {
     this.data = obj;
 
     this.category = function() {
-        var result = [];
+        var result = '[]';
+        var hasBeenTouched = this.hasBeenTouched();
+        var lastTouched = Math.floor((new Date() - new Date(this.data.last_change_time)) / (60*60*24*7*1000));
+        var age = Math.floor((new Date() - new Date(this.data.creation_time)) / (60*60*24*7*1000));
 
         if (this.hasBeenClosed()) {
             result = '[CLOSED]';
@@ -55,43 +60,52 @@ var Bug = function(obj) {
         else if (this.isDone()) {
             result = '[DONE]';
         }
-        else if (this.isInProgress()) {
-            result = '[IN_PROGRESS]';
-        }
-        else if (this.hasBeenReleased()) {
+        else if (this.hasBeenReleased() && hasBeenTouched) {
             result = '[RELEASED]';
         }
-        else if (this.isUnmerged()) {
+        else if (this.isUnmerged() && hasBeenTouched) {
             result = '[UNMERGED]';
         }
-        else if (this.hasBeenPrioritized()) {
-            result = '[PRIORITIZED]';
+        else if ((this.isUnmerged() || this.hasBeenReleased()) && !hasBeenTouched) {
+            result = '[NEEDS_RELEASE_ATTENTION]';
+            console.log('Needs Release Attention', this.data.id, this.data.status, this.data.priority, this.data.resolution, hasBeenTouched, lastTouched);
         }
-        else if (this.notAPriority()) {
+        else if ((this.hasBeenPrioritized() || this.hasBeenAssigned()) &&
+                 this.isP1() && !hasBeenTouched) {
+            result = '[NEEDS_ATTENTION]';
+            console.log('Proritized Needs Attention', this.data.id, this.data.status, this.data.priority, this.data.resolution, hasBeenTouched, lastTouched);
+        }      
+        else if (this.hasBeenPrioritized() || this.hasBeenAssigned() ||
+                 this.notAPriority() || this.forCommunityDevelopers()) {
             result = '[BACKLOG]';
         }
-        else if (this.forCommunityDevelopers()) {
-            result = '[COMMUNITY]';
+        else if ((this.hasVersion() || this.hasKeyword('crash') || this.hasKeyword('topcrash') ||
+                  this.hasKeyword('dataloss')) && this.needsTriage()) {
+            result = '[NEEDS_URGENT_TRIAGE]';
         }
-        else if (this.needsPriority()) {
-            result = '[NEEDS_PRIORITY]';
-        }
-        else if (this.hasVersion()) {
-            result = '[HAS_VERSION]';
-        }
-        else if (this.isNew()) {
-            result = '[NEW]';
-        }
-        else if (this.needsTriage()) {
+        else if (this.inTriage() && age < 14) {
             result = '[NEEDS_TRIAGE]';
         }
+        else if (this.inTriage()) {
+            result = '[NEEDS_TRIAGE_OLD]';
+        }
+        else if (this.hasFlagYoungerThan('needinfo','?', AGE)) {
+            result = '[NEEDS_INFO]';
+        }
+        else {
+            result = '[NEEDS_ATTENTION]';
+            console.log('Needs Attention Other', this.data.id, this.data.status, this.data.priority, this.data.resolution, hasBeenTouched, lastTouched);
+        }
+        /*
         else {
             console.log('Could not categorize', this.data.id, this.data.status, this.data.resolution);
         }
-
+        */
         return result;
     };
-
+    this.hasBeenTouched = function() {
+        return (new Date() - new Date(this.data.last_change_time) < AGE);
+    }
     this.hasBeenClosed = function() {
         return (['CLOSED', 'VERIFIED', 'RESOLVED'].indexOf(this.data.status.toUpperCase()) > -1 &&
                 ['DUPLICATE', 'INVALID', 'INCOMPLETE',
@@ -100,7 +114,7 @@ var Bug = function(obj) {
     this.isDone = function() {
         return (this.data.status.toUpperCase() === 'VERIFIED');
     };
-    this.isInProgress = function() {
+    this.hasBeenAssigned = function() {
         return (this.data.status.toUpperCase() === 'ASSIGNED');
     };
     this.hasBeenReleased = function() {
@@ -115,6 +129,19 @@ var Bug = function(obj) {
                 (this.data.target_milestone === '---' &&
                  !this.isTrackingARelease()));
     };
+    this.inTriage = function() {
+        return (this.isNew() || this.needsTriage() ||
+                  this.needsPriority());
+    };
+    this.isP1 = function() {
+        return (this.data.priority.toUpperCase() === 'P1')
+    }
+    this.isP2 = function() {
+        return (this.data.priority.toUpperCase() === 'P2')
+    }
+    this.isP3 = function() {
+        return (this.data.priority.toUpperCase() === 'P3')
+    }
     this.hasBeenPrioritized = function() {
         return ((['P1', 'P2', 'P3'].indexOf(this.data.priority.toUpperCase()) > -1) ||
                 this.hasFlag('firefox-backlog', '+'));
@@ -141,7 +168,18 @@ var Bug = function(obj) {
         return (this.data.flags && this.data.flags.some(function(flag, i, arry) {
                     return (flag.name === name && flag.status === status);
                 }));
-    }
+    };
+    this.hasFlagYoungerThan = function(name, status, age) {
+        return (this.hasFlag(name, status) && this.data.flags.some(function(flag, i, arry) {
+                    return (flag.name === name && (new Date(flag.modification_date) < Date()));
+                }));
+    };
+    this.hasKeyword = function(keyword) {
+        return (this.keywords && this.keywords.indexOf(keyword) > -1);
+    };
+    this.hasNeedInfo = function() {
+        return this.hasFlag('needinfo', '?')
+    };
     this.isTrackingARelease = function() {
         var keys = Object.keys(this.data);
         var statusFlags = keys.filter(function(key, i, arr) {
