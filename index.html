@@ -14,8 +14,24 @@
         margin-left: 20px;
         margin-top: 1em;
     }
-    div.container {
+    div.container, div#bug-list {
         width: 960px;
+    }
+    div.container {
+        position: fixed;
+        top: 0px;
+        height: 12em;
+        z-index: 1;
+        background-color: snow;
+    }
+    li {
+        display: inline;
+        margin-left: -20px;
+        margin-right: 30px;
+    }
+    div#bug-list {
+        margin-top: 13em;
+        margin-left: 20px;     
     }
     div.bar {
         background-color: rebeccapurple;
@@ -42,14 +58,19 @@
     }
     div.status, div.total {
         font-size: 125%;
-        padding-top: 2em;
         margin-left: 20px;
     }   
     div.footer {
-        position: absolute;
-        bottom: 1em;
-        margin-left: 1em;
+        position: fixed;
+        bottom: 0px;
+        right: 0px;
+        height: 2em;
+        padding-top: 0.5em;
+        padding-left: 20px;
+        border-top: solid 1px darkslategrey
         z-index: 1;
+        background-color: snow;
+        width: 100%;
     }
     div.error {
         display: none;
@@ -77,19 +98,32 @@
 </style>
 </head>
 <body>
-<h1>Password Manager Bugs</h1>
 <div class="container">
+<h1>Component Triage Dashboard</h1>
+<div class="total"></div>
 <div class="status">Loading…</div>
-</div>
-<div class="total">
-
+<ul class="interesting-totals">
+    
+</ul>
 </div>
 <div class="error">
     <div class="message"></div>
 </div>
+<div id="bug-list" style="display: none;">
+  <input class="search" placeholder="Search" />
+  <button class="sort" data-sort="component">
+    Sort by Component
+  </button>
+  <table> 
+    <tbody class="list">
+      <tr id='item-template'><td class="id"></td><td class="component"></td><td class="summary"></td><td class="interesting"></td><td class="status"></td><td class="resoultion"></td></tr>
+    </tbody>
+  </table>
+</div>
 <div class="footer">
     © 2015, Mozilla Corporation, <a href="https://github.com/emceeaich/component-dashboard">Source</a>
 </div>
+<script src="list.js"></script>
 <script src="index.js"></script>
 </body>
 </html>

@@ -16,17 +16,18 @@ var AGE  = 2*60*60*24*7*1000; // weeks in µ seconds
 
 var statusLine = document.querySelector('div.status');
 var totalLine  = document.querySelector('div.total');
-var product    = "Toolkit";
-var component  = "Password Manager";
+var table      = document.querySelector('div.bug-list table');
+var product    = "Core, Toolkit, Firefox, and Fennec (Android/iOS)";
+var lastWeek   = "2016-01-19"; // fake it for now
 
-document.querySelector('h1').innerText = 'Component Dashboard for ' + product + ':' + component;
+document.querySelector('h1').innerText = 'Component Triage Dashboard for ' + product;
 
 /* Set Up Fetch */
 
-var bzRequest = new Request('https://bugzilla.mozilla.org/rest/bug?include_fields=id&component=' + 
-    encodeURIComponent(component) +
-    '&product=' +
-    encodeURIComponent(product), { mode: 'cors' });
+var bzRequest = new Request('https://bugzilla.mozilla.org/rest/bug?' +
+    'include_fields=id,summary,product,component,status,resolution' + 
+    '&product=Core&product=Firefox&product=Firefox%20for%20Android&product=Firefox%20for%20iOS&product=Toolkit' +
+    '&status=NEW&last_change_time=' + lastWeek, { mode: 'cors' });
 
 fetch(bzRequest)
 .then(function(response) {
@@ -43,171 +44,49 @@ fetch(bzRequest)
     displayError('Something went dreadfully wrong when we tried to request the bug list.');
 });
 
-/* Create an object to Classify Bugs */
+/* Create an object to inspect bug history */
+var History = function(obj) {
+    this.history = obj.history;
+    this.id      = obj.id;
 
-var Bug = function(obj) {
-    this.data = obj;
-
-    this.category = function() {
-        var result = '[]';
-        var hasBeenTouched = this.hasBeenTouched();
-        var lastTouched = Math.floor((new Date() - new Date(this.data.last_change_time)) / (60*60*24*7*1000));
-        var age = Math.floor((new Date() - new Date(this.data.creation_time)) / (60*60*24*7*1000));
-
-        if (this.hasBeenClosed()) {
-            result = '[CLOSED]';
-        }
-        else if (this.isDone()) {
-            result = '[DONE]';
-        }
-        else if (this.hasBeenReleased() && hasBeenTouched) {
-            result = '[RELEASED]';
-        }
-        else if (this.isUnmerged() && hasBeenTouched) {
-            result = '[UNMERGED]';
-        }
-        else if ((this.isUnmerged() || this.hasBeenReleased()) && !hasBeenTouched) {
-            result = '[NEEDS_RELEASE_ATTENTION]';
-            console.log('Needs Release Attention', this.data.id, this.data.status, this.data.priority, this.data.resolution, hasBeenTouched, lastTouched);
-        }
-        else if ((this.hasBeenPrioritized() || this.hasBeenAssigned()) &&
-                 this.isP1() && !hasBeenTouched) {
-            result = '[NEEDS_ATTENTION]';
-            console.log('Proritized Needs Attention', this.data.id, this.data.status, this.data.priority, this.data.resolution, hasBeenTouched, lastTouched);
-        }      
-        else if (this.hasBeenPrioritized() || this.hasBeenAssigned() ||
-                 this.notAPriority() || this.forCommunityDevelopers()) {
-            result = '[BACKLOG]';
-        }
-        else if ((this.hasVersion() || this.hasKeyword('crash') || this.hasKeyword('topcrash') ||
-                  this.hasKeyword('dataloss')) && this.needsTriage()) {
-            result = '[NEEDS_URGENT_TRIAGE]';
-        }
-        else if (this.inTriage() && age < 14) {
-            result = '[NEEDS_TRIAGE]';
-        }
-        else if (this.inTriage()) {
-            result = '[NEEDS_TRIAGE_OLD]';
-        }
-        else if (this.hasFlagYoungerThan('needinfo','?', AGE)) {
-            result = '[NEEDS_INFO]';
-        }
-        else {
-            result = '[NEEDS_ATTENTION]';
-            console.log('Needs Attention Other', this.data.id, this.data.status, this.data.priority, this.data.resolution, hasBeenTouched, lastTouched);
-        }
-        /*
-        else {
-            console.log('Could not categorize', this.data.id, this.data.status, this.data.resolution);
-        }
-        */
-        return result;
-    };
-    this.hasBeenTouched = function() {
-        return (new Date() - new Date(this.data.last_change_time) < AGE);
-    }
-    this.hasBeenClosed = function() {
-        return (['CLOSED', 'VERIFIED', 'RESOLVED'].indexOf(this.data.status.toUpperCase()) > -1 &&
-                ['DUPLICATE', 'INVALID', 'INCOMPLETE',
-                 'WONTFIX', 'WORKSFORME', 'EXPIRED'].indexOf(this.data.resolution.toUpperCase()) > -1);      
-    };
-    this.isDone = function() {
-        return (this.data.status.toUpperCase() === 'VERIFIED');
-    };
-    this.hasBeenAssigned = function() {
-        return (this.data.status.toUpperCase() === 'ASSIGNED');
-    };
-    this.hasBeenReleased = function() {
-        return ((this.data.status.toUpperCase() === 'RESOLVED' &&
-                 this.data.resolution.toUpperCase() === 'FIXED') &&
-                (this.data.target_milestone !== '---' || 
-                 this.isTrackingARelease()));
-    };
-    this.isUnmerged = function() {
-        return ((this.data.status.toUpperCase() === 'RESOLVED' &&
-                 this.data.resolution.toUpperCase() === 'FIXED') &&
-                (this.data.target_milestone === '---' &&
-                 !this.isTrackingARelease()));
-    };
-    this.inTriage = function() {
-        return (this.isNew() || this.needsTriage() ||
-                  this.needsPriority());
-    };
-    this.isP1 = function() {
-        return (this.data.priority.toUpperCase() === 'P1')
-    }
-    this.isP2 = function() {
-        return (this.data.priority.toUpperCase() === 'P2')
-    }
-    this.isP3 = function() {
-        return (this.data.priority.toUpperCase() === 'P3')
-    }
-    this.hasBeenPrioritized = function() {
-        return ((['P1', 'P2', 'P3'].indexOf(this.data.priority.toUpperCase()) > -1) ||
-                this.hasFlag('firefox-backlog', '+'));
-    };
-    this.notAPriority = function() {
-        return (['P4'].indexOf(this.data.priority.toUpperCase()) > -1);
-    };
-    this.forCommunityDevelopers = function() {
-        return (['P5'].indexOf(this.data.priority.toUpperCase()) > -1 || this.hasWhiteboardTag('good first bug'));
-    }
-    this.needsPriority = function() {
-        return (this.hasFlag('firefox-backlog', '?') || this.data.status.toUpperCase() === 'REOPENED');
-    };
-    this.hasVersion = function() {
-        return (this.isFlaggedForARelease());
-    };
-    this.isNew = function() {
-        return (this.data.status === 'NEW');
-    };
-    this.needsTriage = function() {
-        return (this.data.status === 'UNCONFIRMED');
-    };
-    this.hasFlag = function(name, status) {
-        return (this.data.flags && this.data.flags.some(function(flag, i, arry) {
-                    return (flag.name === name && flag.status === status);
-                }));
-    };
-    this.hasFlagYoungerThan = function(name, status, age) {
-        return (this.hasFlag(name, status) && this.data.flags.some(function(flag, i, arry) {
-                    return (flag.name === name && (new Date(flag.modification_date) < Date()));
-                }));
-    };
-    this.hasKeyword = function(keyword) {
-        return (this.keywords && this.keywords.indexOf(keyword) > -1);
-    };
-    this.hasNeedInfo = function() {
-        return this.hasFlag('needinfo', '?')
-    };
-    this.isTrackingARelease = function() {
-        var keys = Object.keys(this.data);
-        var statusFlags = keys.filter(function(key, i, arr) {
-            return (key.indexOf('cf_status_firefox') === 0);
+    this.setInterestingHistory = function() {
+        interestingChanges = [];
+        this.history.sort(function(a, b) {
+                return b - a;
+            }).forEach(function(evt, i) {
+            evt.changes.forEach(function(change, i) {
+                if (change.field_name === 'component') {
+                    interestingChanges.push('moved to component');
+                }
+                if (change.field_name === 'keywords' &&
+                    change.added.match('crash')) {
+                    interestingChanges.push('crasher');
+                }
+                if (change.field_name === 'keywords' &&
+                    change.added.match('regression')) {
+                    interestingChanges.push('regression');
+                }
+                if (change.field_name === 'keywords' &&
+                    change.added.match('regressionwindowwanted')) {
+                }
+            });
         });
-        return statusFlags.some(function(flag, i, arr) {
-            return (['affected','fixed','verified'].indexOf(this.data[flag]) > -1);
-        }, this);
+        this.interestingChanges = interestingChanges;
     };
-    this.isFlaggedForARelease = function() {
-        var keys = Object.keys(this.data);
-        var releaseFlags = keys.filter(function(key, i, arr) {
-            return (key.indexOf('cf_tracking_firefox') === 0);
-        });
-        return releaseFlags.some(function(flag, i, arr) {
-            return (['?'].indexOf(this.data[flag]) > -1);
-        }, this);
+
+    this.set = function(obj) {
+        this.summary     = obj.summary || '';
+        this.product     = obj.product     || '';
+        this.component   = obj.component   || '';
+        this['status']   = obj['status']   || '';
+        this.resolution  = obj.resolution  || '';
     };
-    this.hasWhiteboardTag = function(tag) {
-        return (this.data.whiteboard.toLowerCase().indexOf(tag) > -1 ||
-                this.data.whiteboard.toLowerCase().indexOf('[' + tag + ']') > -1 ||
-                this.data.whiteboard.toLowerCase().indexOf('[ ' + tag + ' ]') > -1)
-    };
-    return this;
 }
 
 function createReport(data, sliceSize) {
     console.log ('got', data.length, 'bugs');
+    
+    var subRequest, history, bugHistories = [], done = false, resolved = 0, keys = {};
 
     if (data.length > 0) {
         totalLine.innerHTML = "<strong>Total:</strong> " + data.length;
@@ -216,88 +95,98 @@ function createReport(data, sliceSize) {
         totalLine.innerHTML = "<strong>zarro boogs found</strong>";
     }
 
-    // take slices of the array and fetch each one's details
-    var offset = 0, more = true, slice, slices, buglist, subRequest, returns = 0, bugs = [], ids, timers, isErr = false, done = false, i = 0;
+    data.forEach(function(boog, i) {
+        if (done) { return; }
 
-    slices = Math.ceil(data.length / sliceSize);
-    console.log('will fetch', slices, 'slices of', sliceSize, 'bugs');    
+        keys[boog.id] = {
+            summary:     boog.summary,
+            product:     boog.product,
+            component:   boog.component,
+            'status':    boog['status'],
+            resolution:  boog.resolution
+        };
 
-    while (!done) {
-        slice = data.slice(offset, offset + sliceSize);
-        ids = slice.map(function(bug,i,arr) { return bug.id; }).join(',');
+        subRequest = new Request('https://bugzilla.mozilla.org/rest/bug/' + boog.id + '/history?new_since=' + lastWeek,
+            {mode: 'cors'});
 
-        if (slice.length > 0) {
-            subRequest = new Request('https://bugzilla.mozilla.org/rest/bug?id=' + 
-                ids, { mode: 'cors' });
-
-            fetch(subRequest)
-            .then(function(response) {
-                if(response.ok) {
-                    response.json().then(function(json) {
-                        returns++; // count returned response
-                        Array.prototype.push.apply(bugs, json.bugs);
-                        if (returns === slices) {
-                            console.log('got back all slices');
-                            renderReport(bugs);
+        fetch(subRequest).then(function(response) {
+            if(response.ok) {
+                response.json().then(function(json) {
+                    json.bugs.forEach(function(bug, i) {
+                        history = new History(bug);
+                        history.set(keys[history.id]);
+                        history.setInterestingHistory();
+                        bugHistories.push(history);
+                        resolved++;                        
+                        statusLine.innerText = 'Boog ' + resolved;
+                        if (resolved === data.length) {
+                            done = true;
+                            renderReport(bugHistories);
                         }
-                        statusLine.innerText = 'Read ' + bugs.length + ' bugs';
-                    });
-                }
-                else {
-                    displayError('Request for bugs returned an invalid http response.');
-                    done = true;
-                }
-            })
-            .catch(function(error) {
-                displayError('Something went dreadfully wrong when we tried to request the bugs.');
+                    });        
+                });
+            } else {
+                displayError('Request for bugs returned an invalid http response.');
                 done = true;
-            });
-        }
-        offset = offset + sliceSize;
-        i ++;
-        if (i > slices) {
+            }
+        })
+        .catch(function(error) {
+            displayError('Something went dreadfully wrong when we tried to request the bugs.');
             done = true;
-        }
-    }
+        });
+    });
+
 }
 
 function renderReport(data) {
-    var container = false, bar, legend, percent;
+    var container = false, li, interesting, options;
     var categories = classifyBugs(data);
     var total = 0;
+    var interestingTotals = document.querySelector('ul.interesting-totals');
 
     // Check our work
     console.log('Got back', data.length, 'bugs');
 
-
-    Object.keys(categories).forEach(function(category, i, arr) { total = total + categories[category]; });
-    console.log('Total', total, 'bugs');
-
     Object.keys(categories).forEach(function(category, i, arr) { 
 
-        percent = Math.floor((categories[category] / total) * 100) + '%';
-
         if (typeof window !== 'undefined') {
-
             // Do this once
             if (!container) {
                 container = document.querySelector('div.container');
                 container.removeChild(statusLine);
             }
-            bar = document.createElement('div');
-            bar.className = 'bar ' + category.replace(/([\[\]])/g,'').toLowerCase();
-            bar.style.width = percent;
-            container.appendChild(bar);
-            legend = document.createElement('span');
-            legend.className = 'legend';
-            legend.innerText = category + ': ' + categories[category] + ': ' + percent;
-            bar.appendChild(legend);
+            li = document.createElement('li');
+            li.innerText = category + ': ' + categories[category];
+            interestingTotals.appendChild(li);
         }
         else {
             console.log(category, categories[category], percent);    
         }
 
-    });  
+    }); 
+
+    interesting = data.filter(function(bug, i) {
+        return (bug.interestingChanges.length > 0);
+    })
+    .map(function(bug, i) {
+        return {
+                        // this is a hack because list.js does not support complex templates
+                        // but the template code uses .innerHTML instead of innerText :(
+            id:          '<a href="https://bugzilla.mozilla.org/show_bug.cgi?id=' + bug.id + '">' + bug.id + '</a>',
+            component:   bug.product + ' : ' + bug.component,
+            summary:     bug.summary,
+            interesting: bug.interestingChanges.join(', '),
+            'status':    bug['status'],
+            resolution:  bug.resolution
+        };
+    });
+
+    var interestingList = new List('bug-list', {
+        valueNames: ['id', 'component', 'summary', 'interesting', 'status', 'resolution'],
+        item: 'item-template'
+    }, interesting);
+
+    document.querySelector('#bug-list').style.display = '';
 };
 
 function displayError(text) {
@@ -309,14 +198,15 @@ function displayError(text) {
 function classifyBugs(data) {
     var categories = {};
     data.forEach(function(entry, i, arr) {
-        var bug = new Bug(entry);
-        var category = bug.category();
-        if (categories[category]) {
-            categories[category]++;
-        }
-        else {
-            categories[category] = 1;
-        }
+        entry.interestingChanges.forEach(function(change, i) {
+            var category = change;
+            if (categories[category]) {
+                categories[category]++;
+            }
+            else {
+                categories[category] = 1;
+            }
+        });
     });
     return categories;
 }
